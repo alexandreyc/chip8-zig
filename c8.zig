@@ -1,4 +1,9 @@
 const std = @import("std");
+const print = std.debug.print;
+
+pub const Error = error{
+    IllegalOpcode,
+};
 
 const Nibble = u4;
 
@@ -56,9 +61,8 @@ pub const Opcode = union(enum) {
     ldbx: Nibble,
     ldix: Nibble,
     ldxi: Nibble,
-    unknown: void,
 
-    pub fn decode(opcode: u16) Opcode {
+    pub fn decode(opcode: u16) ?Opcode {
         const nnn: u12 = @truncate(u12, opcode);
         const x: u4 = @truncate(u4, opcode >> 8);
         const y: u4 = @truncate(u4, opcode >> 4);
@@ -91,7 +95,7 @@ pub const Opcode = union(enum) {
                     0x6 => return Opcode{ .shrxy = .{ .x = x, .y = y } },
                     0x7 => return Opcode{ .subnxy = .{ .x = x, .y = y } },
                     0xE => return Opcode{ .shlxy = .{ .x = x, .y = y } },
-                    else => return Opcode.unknown,
+                    else => return null,
                 }
             },
             0x9000 => return Opcode{ .snexy = .{ .x = x, .y = y } },
@@ -104,7 +108,7 @@ pub const Opcode = union(enum) {
                     return Opcode{ .skpx = x };
                 if (kk == 0xA1)
                     return Opcode{ .sknpx = x };
-                return Opcode.unknown;
+                return null;
             },
             0xF000 => {
                 switch (kk) {
@@ -117,13 +121,13 @@ pub const Opcode = union(enum) {
                     0x33 => return Opcode{ .ldbx = x },
                     0x55 => return Opcode{ .ldix = x },
                     0x65 => return Opcode{ .ldxi = x },
-                    else => return Opcode.unknown,
+                    else => return null,
                 }
             },
-            else => return Opcode.unknown,
+            else => return null,
         }
 
-        return Opcode.unknown;
+        return null;
     }
 
     fn eq(self: Opcode, other: Opcode) bool {
@@ -147,11 +151,51 @@ pub const Opcode = union(enum) {
                 if (@TypeOf(val) == NibbleByte)
                     return val.x == oval.x and val.kk == oval.kk;
 
-                @compileError("Unknown union type");
+                @compileError("Unhandled union variant");
             },
         }
 
         return false;
+    }
+
+    pub fn display(self: Opcode, pc: u16) !void {
+        switch (self) {
+            .sys => |nnn| print("0x{X:0>4}: SYS 0x{X}\n", .{ pc, nnn }),
+            .cls => print("0x{X:0>4}: CLS\n", .{pc}),
+            .ret => print("0x{X:0>4}: RET\n", .{pc}),
+            .jp => |nnn| print("0x{X:0>4}: JP 0x{X:0>4}\n", .{ pc, nnn }),
+            .call => |nnn| print("0x{X:0>4}: CALL 0x{X:0>4}\n", .{ pc, nnn }),
+            .sexkk => |nb| print("0x{X:0>4}: SE V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .snexkk => |nb| print("0x{X:0>4}: SNE V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .sexy => |dn| print("0x{X:0>4}: SE V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .ldxkk => |nb| print("0x{X:0>4}: LD V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .addxkk => |nb| print("0x{X:0>4}: ADD V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .ldxy => |dn| print("0x{X:0>4}: LD V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .orxy => |dn| print("0x{X:0>4}: OR V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .andxy => |dn| print("0x{X:0>4}: AND V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .xorxy => |dn| print("0x{X:0>4}: XOR V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .addxy => |dn| print("0x{X:0>4}: ADD V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .subxy => |dn| print("0x{X:0>4}: SUB V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .shrxy => |dn| print("0x{X:0>4}: SHR V{d}\n", .{ pc, dn.x }),
+            .subnxy => |dn| print("0x{X:0>4}: SUBN V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .shlxy => |dn| print("0x{X:0>4}: SHL V{d}\n", .{ pc, dn.x }),
+            .snexy => |dn| print("0x{X:0>4}: SNE V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .ldnnn => |nnn| print("0x{X:0>4}: LD I, 0x{X:0>4}\n", .{ pc, nnn }),
+            .jpnnn => |nnn| print("0x{X:0>4}: JP V0, 0x{X:0>4}\n", .{ pc, nnn }),
+            .rndxkk => |nb| print("0x{X:0>4}: RND V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .drwxyn => |tn| print("0x{X:0>4}: DRW V{d}, V{d}, 0x{X}\n", .{ pc, tn.x, tn.y, tn.z }),
+            .skpx => |x| print("0x{X:0>4}: SKP V{d}\n", .{ pc, x }),
+            .sknpx => |x| print("0x{X:0>4}: SKNP V{d}\n", .{ pc, x }),
+            .ldxdt => |x| print("0x{X:0>4}: LD V{d}, DT\n", .{ pc, x }),
+            .ldxk => |x| print("0x{X:0>4}: LD V{d}, K\n", .{ pc, x }),
+            .lddtx => |x| print("0x{X:0>4}: LD DT, V{d}\n", .{ pc, x }),
+            .ldstx => |x| print("0x{X:0>4}: LD ST, V{d}\n", .{ pc, x }),
+            .addix => |x| print("0x{X:0>4}: ADD I, V{d}\n", .{ pc, x }),
+            .ldfx => |x| print("0x{X:0>4}: LD F, V{d}\n", .{ pc, x }),
+            .ldbx => |x| print("0x{X:0>4}: LD B, V{d}\n", .{ pc, x }),
+            .ldix => |x| print("0x{X:0>4}: LD [I], V{d}\n", .{ pc, x }),
+            .ldxi => |x| print("0x{X:0>4}: LD V{d}, [I]\n", .{ pc, x }),
+        }
     }
 };
 
@@ -170,7 +214,7 @@ test "opcode decode" {
     };
 
     for (cases) |case| {
-        const got = Opcode.decode(case.opcode);
+        const got = Opcode.decode(case.opcode) orelse return Error.IllegalOpcode;
         try expect(got.eq(case.expected));
     }
 }
