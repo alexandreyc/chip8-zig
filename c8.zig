@@ -1,6 +1,10 @@
 const std = @import("std");
 const print = std.debug.print;
 
+pub const ram_size = 4 * 1024; // 4 KiB
+pub const rom_offset = 512;
+pub const max_rom_size = ram_size - rom_offset;
+
 pub const Error = error{
     IllegalOpcode,
 };
@@ -158,43 +162,43 @@ pub const Opcode = union(enum) {
         return false;
     }
 
-    pub fn display(self: Opcode, pc: u16) !void {
+    pub fn print(self: Opcode, pc: u16, writer: anytype) !void {
         switch (self) {
-            .sys => |nnn| print("0x{X:0>4}: SYS 0x{X}\n", .{ pc, nnn }),
-            .cls => print("0x{X:0>4}: CLS\n", .{pc}),
-            .ret => print("0x{X:0>4}: RET\n", .{pc}),
-            .jp => |nnn| print("0x{X:0>4}: JP 0x{X:0>4}\n", .{ pc, nnn }),
-            .call => |nnn| print("0x{X:0>4}: CALL 0x{X:0>4}\n", .{ pc, nnn }),
-            .sexkk => |nb| print("0x{X:0>4}: SE V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
-            .snexkk => |nb| print("0x{X:0>4}: SNE V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
-            .sexy => |dn| print("0x{X:0>4}: SE V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .ldxkk => |nb| print("0x{X:0>4}: LD V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
-            .addxkk => |nb| print("0x{X:0>4}: ADD V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
-            .ldxy => |dn| print("0x{X:0>4}: LD V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .orxy => |dn| print("0x{X:0>4}: OR V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .andxy => |dn| print("0x{X:0>4}: AND V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .xorxy => |dn| print("0x{X:0>4}: XOR V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .addxy => |dn| print("0x{X:0>4}: ADD V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .subxy => |dn| print("0x{X:0>4}: SUB V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .shrxy => |dn| print("0x{X:0>4}: SHR V{d}\n", .{ pc, dn.x }),
-            .subnxy => |dn| print("0x{X:0>4}: SUBN V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .shlxy => |dn| print("0x{X:0>4}: SHL V{d}\n", .{ pc, dn.x }),
-            .snexy => |dn| print("0x{X:0>4}: SNE V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
-            .ldnnn => |nnn| print("0x{X:0>4}: LD I, 0x{X:0>4}\n", .{ pc, nnn }),
-            .jpnnn => |nnn| print("0x{X:0>4}: JP V0, 0x{X:0>4}\n", .{ pc, nnn }),
-            .rndxkk => |nb| print("0x{X:0>4}: RND V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
-            .drwxyn => |tn| print("0x{X:0>4}: DRW V{d}, V{d}, 0x{X}\n", .{ pc, tn.x, tn.y, tn.z }),
-            .skpx => |x| print("0x{X:0>4}: SKP V{d}\n", .{ pc, x }),
-            .sknpx => |x| print("0x{X:0>4}: SKNP V{d}\n", .{ pc, x }),
-            .ldxdt => |x| print("0x{X:0>4}: LD V{d}, DT\n", .{ pc, x }),
-            .ldxk => |x| print("0x{X:0>4}: LD V{d}, K\n", .{ pc, x }),
-            .lddtx => |x| print("0x{X:0>4}: LD DT, V{d}\n", .{ pc, x }),
-            .ldstx => |x| print("0x{X:0>4}: LD ST, V{d}\n", .{ pc, x }),
-            .addix => |x| print("0x{X:0>4}: ADD I, V{d}\n", .{ pc, x }),
-            .ldfx => |x| print("0x{X:0>4}: LD F, V{d}\n", .{ pc, x }),
-            .ldbx => |x| print("0x{X:0>4}: LD B, V{d}\n", .{ pc, x }),
-            .ldix => |x| print("0x{X:0>4}: LD [I], V{d}\n", .{ pc, x }),
-            .ldxi => |x| print("0x{X:0>4}: LD V{d}, [I]\n", .{ pc, x }),
+            .sys => |nnn| try writer.print("0x{X:0>4}: SYS 0x{X}\n", .{ pc, nnn }),
+            .cls => try writer.print("0x{X:0>4}: CLS\n", .{pc}),
+            .ret => try writer.print("0x{X:0>4}: RET\n", .{pc}),
+            .jp => |nnn| try writer.print("0x{X:0>4}: JP 0x{X:0>4}\n", .{ pc, nnn }),
+            .call => |nnn| try writer.print("0x{X:0>4}: CALL 0x{X:0>4}\n", .{ pc, nnn }),
+            .sexkk => |nb| try writer.print("0x{X:0>4}: SE V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .snexkk => |nb| try writer.print("0x{X:0>4}: SNE V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .sexy => |dn| try writer.print("0x{X:0>4}: SE V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .ldxkk => |nb| try writer.print("0x{X:0>4}: LD V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .addxkk => |nb| try writer.print("0x{X:0>4}: ADD V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .ldxy => |dn| try writer.print("0x{X:0>4}: LD V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .orxy => |dn| try writer.print("0x{X:0>4}: OR V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .andxy => |dn| try writer.print("0x{X:0>4}: AND V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .xorxy => |dn| try writer.print("0x{X:0>4}: XOR V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .addxy => |dn| try writer.print("0x{X:0>4}: ADD V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .subxy => |dn| try writer.print("0x{X:0>4}: SUB V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .shrxy => |dn| try writer.print("0x{X:0>4}: SHR V{d}\n", .{ pc, dn.x }),
+            .subnxy => |dn| try writer.print("0x{X:0>4}: SUBN V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .shlxy => |dn| try writer.print("0x{X:0>4}: SHL V{d}\n", .{ pc, dn.x }),
+            .snexy => |dn| try writer.print("0x{X:0>4}: SNE V{d}, V{d}\n", .{ pc, dn.x, dn.y }),
+            .ldnnn => |nnn| try writer.print("0x{X:0>4}: LD I, 0x{X:0>4}\n", .{ pc, nnn }),
+            .jpnnn => |nnn| try writer.print("0x{X:0>4}: JP V0, 0x{X:0>4}\n", .{ pc, nnn }),
+            .rndxkk => |nb| try writer.print("0x{X:0>4}: RND V{d}, 0x{X:0>2}\n", .{ pc, nb.x, nb.kk }),
+            .drwxyn => |tn| try writer.print("0x{X:0>4}: DRW V{d}, V{d}, 0x{X}\n", .{ pc, tn.x, tn.y, tn.z }),
+            .skpx => |x| try writer.print("0x{X:0>4}: SKP V{d}\n", .{ pc, x }),
+            .sknpx => |x| try writer.print("0x{X:0>4}: SKNP V{d}\n", .{ pc, x }),
+            .ldxdt => |x| try writer.print("0x{X:0>4}: LD V{d}, DT\n", .{ pc, x }),
+            .ldxk => |x| try writer.print("0x{X:0>4}: LD V{d}, K\n", .{ pc, x }),
+            .lddtx => |x| try writer.print("0x{X:0>4}: LD DT, V{d}\n", .{ pc, x }),
+            .ldstx => |x| try writer.print("0x{X:0>4}: LD ST, V{d}\n", .{ pc, x }),
+            .addix => |x| try writer.print("0x{X:0>4}: ADD I, V{d}\n", .{ pc, x }),
+            .ldfx => |x| try writer.print("0x{X:0>4}: LD F, V{d}\n", .{ pc, x }),
+            .ldbx => |x| try writer.print("0x{X:0>4}: LD B, V{d}\n", .{ pc, x }),
+            .ldix => |x| try writer.print("0x{X:0>4}: LD [I], V{d}\n", .{ pc, x }),
+            .ldxi => |x| try writer.print("0x{X:0>4}: LD V{d}, [I]\n", .{ pc, x }),
         }
     }
 };
